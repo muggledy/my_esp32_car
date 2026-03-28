@@ -229,31 +229,36 @@
     <div class="control-panel">
         <div class="control-btn empty"></div>
         <button class="control-btn" id="btnForward"
-                onmousedown="sendCmd('forward')"
-                onmouseup="sendCmd('stop')"
-                ontouchstart="sendCmd('forward')"
-                ontouchend="sendCmd('stop')">▲</button>
+            onmousedown="sendCmd('forward')"
+            onmouseup="sendCmd('stop')"
+            ontouchstart="sendCmd('forward'); event.preventDefault();"
+            ontouchend="sendCmd('stop'); event.preventDefault();"
+            oncontextmenu="return false;">▲</button>
         <div class="control-btn empty"></div>
 
         <button class="control-btn" id="btnLeft"
-                onmousedown="sendCmd('left')"
-                onmouseup="sendCmd('stop')"
-                ontouchstart="sendCmd('left')"
-                ontouchend="sendCmd('stop')">◀</button>
+            onmousedown="sendCmd('left')"
+            onmouseup="sendCmd('stop')"
+            ontouchstart="sendCmd('left'); event.preventDefault();"
+            ontouchend="sendCmd('stop'); event.preventDefault();"
+            oncontextmenu="return false;">◀</button>
         <button class="control-btn stop-btn" id="btnStop"
-                onclick="sendCmd('stop')">⏹</button>
+            onclick="sendCmd('stop')"
+            oncontextmenu="return false;">⏹</button>
         <button class="control-btn" id="btnRight"
-                onmousedown="sendCmd('right')"
-                onmouseup="sendCmd('stop')"
-                ontouchstart="sendCmd('right')"
-                ontouchend="sendCmd('stop')">▶</button>
+            onmousedown="sendCmd('right')"
+            onmouseup="sendCmd('stop')"
+            ontouchstart="sendCmd('right'); event.preventDefault();"
+            ontouchend="sendCmd('stop'); event.preventDefault();"
+            oncontextmenu="return false;">▶</button>
 
         <div class="control-btn empty"></div>
         <button class="control-btn" id="btnBackward"
-                onmousedown="sendCmd('backward')"
-                onmouseup="sendCmd('stop')"
-                ontouchstart="sendCmd('backward')"
-                ontouchend="sendCmd('stop')">▼</button>
+            onmousedown="sendCmd('backward')"
+            onmouseup="sendCmd('stop')"
+            ontouchstart="sendCmd('backward'); event.preventDefault();"
+            ontouchend="sendCmd('stop'); event.preventDefault();"
+            oncontextmenu="return false;">▼</button>
         <div class="control-btn empty"></div>
     </div>
 

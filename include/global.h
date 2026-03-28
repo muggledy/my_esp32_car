@@ -24,4 +24,6 @@
 #define CLR_FLAG(field, flag) (field) &= (~flag)
 #define TST_FLAG(field, flag) ((field) & flag)
 
+#define SYSTEM_UP_SECONDS ((unsigned long)(millis()/1000))
+
 #endif

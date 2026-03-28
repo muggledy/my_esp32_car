@@ -3,7 +3,6 @@
 uint16_t motor_max_resolution_val = pow(2, MOTOR_PWM_RESOLUTION) - 1; // [0, max_resolution_val] is valid
 
 smart_car_t car = {
-    .direction = 0,
     .speed_left = 255,
     .speed_right = 255,
     .gear = 255
@@ -27,7 +26,7 @@ void init_car_motor() {
     // 初始化速度：0（停止状态）
     MOTOR_MOVE_STOP(&car);
 #ifdef ENABLE_SERIAL_DEBUG
-    Serial.println("[INFO] 4WD motor initialization completed");
+    Serial.printf("[INFO] 4WD motor initialization completed(%lus)\n", SYSTEM_UP_SECONDS);
 #endif
 }
 
