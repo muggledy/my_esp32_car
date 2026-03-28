@@ -1,5 +1,9 @@
 #include <WiFi.h>
 #include "global.h"
+#ifdef ENABLE_LCD1602
+#include "LiquidCrystal_I2C.h"
+extern LiquidCrystal_I2C lcd;
+#endif
 
 #define CONNECT_WIFI_WAIT_TIME_ONCE_MS   500
 #define CONNECT_WIFI_WAIT_TIME_MAX_COUNT 30 //等待wifi连接时长≈15s
@@ -14,11 +18,8 @@ bool connect_wifi() {
     uint8_t n = 0;
 
 #ifdef ENABLE_SERIAL_DEBUG
-    Serial.begin(115200);
-    
-    Serial.println();
     Serial.print("Connecting to WiFi ");
-    Serial.println(ssid);
+    Serial.print(ssid);
 #endif
 
     WiFi.begin(ssid, password);
@@ -48,11 +49,19 @@ bool connect_wifi() {
             }
         }
         SET_FLAG(global_status_word, G_STATE_WIFI_CONNECTED);
+#ifdef ENABLE_LCD1602
+        lcd.clear();
+        lcd.print(WiFi.localIP());
+#endif
         return 1;
     }
 #ifdef ENABLE_SERIAL_DEBUG
     Serial.println("");
     Serial.println("[WARNING] WiFi connect failed");
+#endif
+#ifdef ENABLE_LCD1602
+    lcd.clear();
+    lcd.print("WiFi connect failed");
 #endif
     return 0;
 }

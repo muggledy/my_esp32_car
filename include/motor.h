@@ -21,7 +21,8 @@
 extern uint16_t motor_max_resolution_val;
 
 #define MOTOR_MIN_SPEED 0
-#define MOTOR_MAX_SPEED motor_max_resolution_val
+#define MOTOR_MAX_SPEED motor_max_resolution_val //将MOTOR_MAX_SPEED/2定为基准普通速度
+#define MOTOR_STANDARD_SPEED (MOTOR_MAX_SPEED/2)
 
 typedef struct smart_car_ {
     uint16_t direction;  //方向：0~360
@@ -33,6 +34,10 @@ typedef struct smart_car_ {
 #define MOTOR_R_PARK  3 //倒车档切换到的驻车档
     uint8_t gear;       //档位：前进挡、倒车档、驻车档
 } smart_car_t;
+
+#define CURRENT_SPEED(car) (((car)->speed_left == (car)->speed_right) ? \
+    (car)->speed_left : (((car)->speed_left < (car)->speed_right) ? \
+    (car)->speed_right : (car)->speed_left))
 
 extern smart_car_t car;
 
@@ -78,5 +83,7 @@ extern void motor_move_with_speed(smart_car_t *car, uint16_t speed);
 
 #define MOTOR_MOVE_STOP(car) MOTOR_MOVE_WITH_SPEED(car, MOTOR_MIN_SPEED)
 #define MOTOR_MOVE_FULL_SPEED(car) MOTOR_MOVE_WITH_SPEED(car, MOTOR_MAX_SPEED)
+
+extern void init_car_motor();
 
 #endif

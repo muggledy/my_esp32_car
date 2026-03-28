@@ -10,7 +10,7 @@ smart_car_t car = {
 };
 
 //L298N直流电机驱动模块初始化
-void init_motor_pin_mode() {
+void init_car_motor() {
     pinMode(MOTOR_A_IN1_PIN, OUTPUT);
     pinMode(MOTOR_A_IN2_PIN, OUTPUT);
     pinMode(MOTOR_B_IN3_PIN, OUTPUT);
@@ -26,6 +26,9 @@ void init_motor_pin_mode() {
     MOTOR_SET_DRIVE_GEAR(&car);
     // 初始化速度：0（停止状态）
     MOTOR_MOVE_STOP(&car);
+#ifdef ENABLE_SERIAL_DEBUG
+    Serial.println("[INFO] 4WD motor initialization completed");
+#endif
 }
 
 void motor_move_with_speed(smart_car_t *car, uint16_t speed) {
