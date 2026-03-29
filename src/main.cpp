@@ -117,7 +117,7 @@ void on_web_socket_event(uint8_t num, WStype_t type, uint8_t *payload, size_t le
           Serial.printf("[WebSocket] Received cmd(%lus): %s\n", SYSTEM_UP_SECONDS, cmd.c_str());
 #endif
 #ifdef ENABLE_LCD1602
-          snprintf(buffer, sizeof(buffer), "[cmd]%s", cmd.c_str());
+          snprintf(buffer, sizeof(buffer), "cmd:%s", cmd.c_str());
           lcd.clear();
           lcd.print(buffer);
 #endif
@@ -186,12 +186,46 @@ String handle_command(String cmd) {
       MOTOR_MOVE_RIGHT(&car);
     }
     return "ok: turning right";
+  } else if (cmd.startsWith("chgspeed:")) { // 修改小车速度
+    // 解析速度值
+    int newSpeed = cmd.substring(9).toInt();
+    if (newSpeed >= MOTOR_MIN_SPEED && newSpeed <= MOTOR_MAX_SPEED) {
+      global_car_speed = newSpeed;
+      // 如果小车正在运动，立即应用新速度
+      if ((GET_CURRENT_SPEED(&car) > 0) && (GET_CURRENT_SPEED(&car) != global_car_speed)) {
+        if (IS_TURNING_LEFT(&car)) { //正在左转
+#ifdef ENABLE_SERIAL_DEBUG
+          Serial.printf("[WebSocket] change speed from %u to %u when turning left\n", 
+              GET_CURRENT_SPEED(&car), global_car_speed);
+#endif
+          MOTOR_MOVE_WITH_SPEED(&car, global_car_speed);
+          MOTOR_MOVE_LEFT(&car);
+        } else if (IS_TURNING_RIGHT(&car)) { //正在右转
+#ifdef ENABLE_SERIAL_DEBUG
+          Serial.printf("[WebSocket] change speed from %u to %u when turning right\n", 
+              GET_CURRENT_SPEED(&car), global_car_speed);
+#endif
+          MOTOR_MOVE_WITH_SPEED(&car, global_car_speed);
+          MOTOR_MOVE_RIGHT(&car);
+        } else { //正在前进或倒退
+#ifdef ENABLE_SERIAL_DEBUG
+          Serial.printf("[WebSocket] change speed from %u to %u when %s\n", 
+              GET_CURRENT_SPEED(&car), global_car_speed, GET_CAR_GEAR_STR(&car));
+#endif
+          MOTOR_MOVE_WITH_SPEED(&car, global_car_speed);
+        }
+      }
+      snprintf(buffer, sizeof(buffer), "ok: speed changed to %d", global_car_speed);
+      return buffer;
+    } else {
+      return "error: speed must be 0-" + String(MOTOR_MAX_SPEED);
+    }
   } else if (cmd == "stop") {
     MOTOR_MOVE_STOP(&car);
     return "ok: stopped";
   } else if (cmd == "status") { // 返回当前小车状态
-    snprintf(buffer, sizeof(buffer), "status: %s:%u/%u", GET_CAR_GEAR_STR(&car), 
-        /*GET_CURRENT_SPEED(&car)*/car.speed_left, car.speed_right);
+    snprintf(buffer, sizeof(buffer), "status: %s:%u/%u/%u", GET_CAR_GEAR_STR(&car), 
+        /*GET_CURRENT_SPEED(&car)*/car.speed_left, car.speed_right, global_car_speed);
     return buffer;
   } else {
     return "error: unknown command '" + cmd + "'";
