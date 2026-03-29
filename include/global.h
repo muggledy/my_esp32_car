@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-//项目上线后需注释掉ENABLE_SERIAL_DEBUG宏
+//可注释掉ENABLE_SERIAL_DEBUG宏
 #define ENABLE_SERIAL_DEBUG
 
 #define ENABLE_LCD1602
