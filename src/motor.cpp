@@ -15,19 +15,19 @@ void init_car_motor() {
     pinMode(MOTOR_B_IN3_PIN, OUTPUT);
     pinMode(MOTOR_B_IN4_PIN, OUTPUT);
 
-    // 配置PWM
+    // 配置PWM模式
     ledcSetup(MOTOR_A_PWM_CHANNEL, MOTOR_PWM_FREQUENCE, MOTOR_PWM_RESOLUTION);
     ledcAttachPin(MOTOR_A_PWM_PIN, MOTOR_A_PWM_CHANNEL);
     ledcSetup(MOTOR_B_PWM_CHANNEL, MOTOR_PWM_FREQUENCE, MOTOR_PWM_RESOLUTION);
     ledcAttachPin(MOTOR_B_PWM_PIN, MOTOR_B_PWM_CHANNEL);
 
     // 初始化档位：前进挡
-    MOTOR_SET_DRIVE_GEAR(&car);
+    MOTOR_SET_DRIVE_GEAR(&car, 0);
     // 初始化速度：0（停止状态）
     MOTOR_MOVE_STOP(&car);
-#ifdef ENABLE_SERIAL_DEBUG
-    Serial.printf("[INFO] 4WD motor initialization completed(%lus)\n", SYSTEM_UP_SECONDS);
-#endif
+// #ifdef ENABLE_SERIAL_DEBUG
+//     Serial.printf("[INFO] 4WD motor initialization completed(%lus)\n", SYSTEM_UP_SECONDS);
+// #endif
 }
 
 void motor_move_with_speed(smart_car_t *car, uint16_t speed) {
@@ -41,10 +41,15 @@ void motor_move_with_speed(smart_car_t *car, uint16_t speed) {
         if (speed == 0) {
             MOTOR_SET_PARK_GEAR(car);
         } else {
-            if (car->gear == MOTOR_D_PARK) {
-                MOTOR_SET_DRIVE_GEAR(car);
-            } else if (car->gear == MOTOR_R_PARK) {
-                MOTOR_SET_REVERSE_GEAR(car);
+            if ((car->gear == MOTOR_D_PARK) || 
+                (((car->speed_left == 0) || (car->speed_right == 0)) && (car->gear == MOTOR_DRIVE))) { //PWM调速将为0速
+                //（PARK驻车），下次再次调速使小车运动必须重新给IN1~4加电平信号，为此我将PARK分为了D_PARK和R_PARK，用于恢复IN1~4
+                MOTOR_SET_DRIVE_GEAR(car, 1);
+            } else if ((car->gear == MOTOR_R_PARK) || 
+                (((car->speed_left == 0) || (car->speed_right == 0)) && (car->gear == MOTOR_REVERSE))) { //另外一个或的条件
+                //是为转弯设计的，转弯时会将一侧电机PWM置0，避免PWM有值但是太小带不动电机，导致堵转状态伤害硬件设备，转弯
+                //不会改变档位，前进依然是前进，倒退依然是倒退，因此增加该条件，在从转弯恢复直行时，重置PWM置零那侧电机的控制信号
+                MOTOR_SET_REVERSE_GEAR(car, 1);
             }
         }
         ledcWrite(MOTOR_A_PWM_CHANNEL, speed);

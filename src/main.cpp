@@ -9,6 +9,11 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 /*
 ESP32 DEVKIT V1
 SMART CAR
+1. 小车引脚连接（或参见“接线示意图.drawio”）：
+  1）motor.h中标注了“L298N控制线引脚编号”设置
+  2）lcd1602的SDA接单片机21引脚、SCL接单片机22引脚
+  3）HC-SR04的Trigger/Echo引脚设置见global.h
+2. WiFi账号设置：见wifi.cpp
 */
 
 extern bool connect_wifi();
@@ -16,6 +21,12 @@ extern void on_web_socket_event(uint8_t num, WStype_t type, uint8_t *payload, si
 extern String handle_command(String cmd);
 #ifdef ENABLE_LCD1602
 extern void lcd_print_long_str(const char *str);
+#endif
+#ifdef ENABLE_HCSR04
+extern void IRAM_ATTR echoISR();
+extern void sendTrigger();
+extern void initHCSR04();
+extern void handleCurrentDistance();
 #endif
 
 uint32_t global_status_word = 0;
@@ -28,7 +39,18 @@ int16_t valid_client_id = -1;
 IPAddress remote_ip;
 #endif
 
+//for HC-SR04
+#ifdef ENABLE_HCSR04
+volatile unsigned long echoStart = 0; // 中断服务程序中的相关变量需要加volatile修饰
+volatile unsigned long echoDuration = 0;
+volatile bool newDistanceAvailable = false;
+float distanceCm = 0;
+#endif
+
+// uint8_t lcd_buffer_len = 0;
+
 void setup() {
+  init_car_motor();
 #ifdef ENABLE_SERIAL_DEBUG
   Serial.begin(115200);
 #endif
@@ -38,9 +60,10 @@ void setup() {
   lcd.backlight();
   lcd.print("I'm smart car.");
 #endif
-
-  init_car_motor();
   connect_wifi();
+#ifdef ENABLE_HCSR04
+  initHCSR04();
+#endif
 
   if (TST_FLAG(global_status_word, G_STATE_WIFI_CONNECTED)) { //只有联网成功，才启动WebSocket服务器
     web_socket = new WebSocketsServer(81);
@@ -57,9 +80,19 @@ void setup() {
 }
 
 void loop() {
+  static unsigned long lastTriggerTime = 0;
+
   if (TST_FLAG(global_status_word, G_STATE_WIFI_CONNECTED)) {
     web_socket->loop(); // 处理WebSocket事件（接收消息、发送响应、管理连接）
-    // delay(1);
+
+#ifdef ENABLE_HCSR04
+    // 触发超声波距离探测动作
+    if (millis() - lastTriggerTime >= HCSR04_TRIGGER_INTERVAL) {
+      lastTriggerTime = millis();
+      sendTrigger();
+    }
+    handleCurrentDistance();
+#endif
   }
 }
 
@@ -125,8 +158,12 @@ void on_web_socket_event(uint8_t num, WStype_t type, uint8_t *payload, size_t le
           String response = handle_command(cmd);
           // 发送响应
           web_socket->sendTXT(num, response);
+#ifdef ENABLE_SERIAL_DEBUG
+          Serial.printf("[websocket] %s\n", response);
+#endif
 #ifdef ENABLE_LCD1602
-          snprintf(buffer, sizeof(buffer), "%s:%u/%u", GET_CAR_GEAR_STR(&car), car.speed_left, car.speed_right);
+          /*lcd_buffer_len = */snprintf(buffer, sizeof(buffer), "%s:%u/%u/%u", GET_CAR_GEAR_STR(&car), 
+              car.speed_left, car.speed_right, global_car_speed);
           lcd.setCursor(0, 1);
           lcd.print(buffer);
 #endif
@@ -157,17 +194,20 @@ String handle_command(String cmd) {
 
   if (cmd == "forward") {
     if (car.gear != MOTOR_DRIVE) {
-      MOTOR_SET_DRIVE_GEAR(&car);
+      MOTOR_SET_DRIVE_GEAR(&car, 0);
     }
     if ((GET_CURRENT_SPEED(&car) == 0) || (GET_CURRENT_SPEED(&car) != global_car_speed) 
         || IS_TURNING(&car)) {
       MOTOR_MOVE_WITH_SPEED(&car, global_car_speed);
     }
+    if (distanceCm < HCSR04_SAFE_DISTANCE) { //检查前方是否还有安全距离可以行驶，没有则强制停止
+      MOTOR_MOVE_STOP(&car);
+    }
     return "ok: moving forward";
   }
   else if (cmd == "backward") {
     if (car.gear != MOTOR_REVERSE) {
-      MOTOR_SET_REVERSE_GEAR(&car);
+      MOTOR_SET_REVERSE_GEAR(&car, 0);
     }
     if ((GET_CURRENT_SPEED(&car) == 0) || (GET_CURRENT_SPEED(&car) != global_car_speed) 
         || IS_TURNING(&car)) {
@@ -244,6 +284,74 @@ void lcd_print_long_str(const char *str) {
   lcd.setCursor(0, 1);
   for(int i=16; i<32 && str[i]!='\0'; i++) {
     lcd.write(str[i]);
+  }
+}
+#endif
+
+#ifdef ENABLE_HCSR04
+void initHCSR04() {
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT_PULLUP);
+
+  // 给 Echo 绑定中断
+  attachInterrupt(digitalPinToInterrupt(ECHO_PIN), echoISR, CHANGE);
+
+  // 先触发一次超声波探测动作
+  sendTrigger();
+}
+
+void IRAM_ATTR echoISR() {
+  if (digitalRead(ECHO_PIN) == HIGH) {
+    // 上升沿：开始计时
+    echoStart = micros();
+  } else {
+    // 下降沿：结束计时
+    echoDuration = micros() - echoStart;
+    newDistanceAvailable = true;
+  }
+}
+
+void sendTrigger() {
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+}
+
+void handleCurrentDistance() {
+  // 有新探测到的距离时才处理
+  if (newDistanceAvailable) {
+    newDistanceAvailable = false;
+
+    distanceCm = echoDuration / 58.0;
+
+    if (distanceCm >= HCSR04_MIN_DISTANCE && distanceCm <= HCSR04_MAX_DISTANCE) { // 有效测距
+      if (distanceCm > HCSR04_DISTANCE_BIAS) {
+        distanceCm -= HCSR04_DISTANCE_BIAS;
+      }
+      if ((car.gear == MOTOR_DRIVE) && (distanceCm < HCSR04_SAFE_DISTANCE)) { //自动停止，防止撞击前方阻碍物体
+        MOTOR_MOVE_STOP(&car);
+      }
+#ifdef ENABLE_SERIAL_DEBUG
+      Serial.print("Distance: ");
+      Serial.print(distanceCm);
+      Serial.println(" cm");
+#endif
+#ifdef ENABLE_LCD1602
+      if (TST_FLAG(global_status_word, G_STATE_WS_CONNECTED)) {
+        lcd.setCursor(0, 0);
+        lcd.print("   ");
+        lcd.setCursor(0, 0);
+        lcd.print(int(distanceCm));
+      }
+#endif
+    } else {
+      if (distanceCm > HCSR04_MAX_DISTANCE) {
+        distanceCm = 0;
+      }
+#ifdef ENABLE_SERIAL_DEBUG
+      Serial.println("Distance: Out of range(2~400)");
+#endif
+    }
   }
 }
 #endif

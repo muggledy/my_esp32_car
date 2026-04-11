@@ -21,8 +21,20 @@
 extern uint16_t motor_max_resolution_val;
 
 #define MOTOR_MIN_SPEED 0
-#define MOTOR_MAX_SPEED motor_max_resolution_val //将MOTOR_MAX_SPEED/2定为基准普通速度
+#define MOTOR_MAX_SPEED motor_max_resolution_val //将MOTOR_MAX_SPEED/2=127定为基准普通速度
 #define MOTOR_STANDARD_SPEED (MOTOR_MAX_SPEED/2)
+#define MOTOR_SAFE_PWM_SPEED 90 //PWM 给小了、电机只是嗡嗡响但不转。低于该值，很可能无法带动电机，导致电机堵转
+//即便是基准速度下，转弯时由于一侧PWM置为0，所以驱动力减半，遇到地面不平也会出现堵转情况
+//或者干脆不允许client设置低于该值的PWM速度，并返回错误
+/*如果一定要以较低速行驶，应在启动时加以助推：
+譬如设置速度 = 40
+ ↓
+低于 MOTOR_SAFE_PWM_SPEED → 自动进入助推
+ ↓
+0 ~ 120ms：输出 200 PWM（轮子立刻转起来）
+ ↓
+120ms 后：自动变回 40 PWM（保持低速走）
+*/
 
 typedef struct smart_car_ {
     uint16_t speed_left; //速度：0~255
@@ -50,9 +62,9 @@ typedef struct smart_car_ {
 
 extern smart_car_t car;
 
-#define MOTOR_SET_DRIVE_GEAR(car) \
+#define MOTOR_SET_DRIVE_GEAR(car, force) \
 do { \
-    if ((car)->gear != MOTOR_DRIVE) { \
+    if (((car)->gear != MOTOR_DRIVE) || force) { \
         digitalWrite(MOTOR_A_IN1_PIN, LOW); \
         digitalWrite(MOTOR_A_IN2_PIN, HIGH); \
         digitalWrite(MOTOR_B_IN3_PIN, LOW); \
@@ -61,9 +73,9 @@ do { \
     } \
 } while(0)
 
-#define MOTOR_SET_REVERSE_GEAR(car) \
+#define MOTOR_SET_REVERSE_GEAR(car, force) \
 do { \
-    if ((car)->gear != MOTOR_REVERSE) { \
+    if (((car)->gear != MOTOR_REVERSE) || force) { \
         digitalWrite(MOTOR_A_IN1_PIN, HIGH); \
         digitalWrite(MOTOR_A_IN2_PIN, LOW); \
         digitalWrite(MOTOR_B_IN3_PIN, HIGH); \
@@ -95,9 +107,9 @@ extern void motor_move_with_speed(smart_car_t *car, uint16_t speed);
 
 #define MOTOR_MOVE_LEFT(car) \
 do { \
-    if ((car)->speed_right > 1) { \
-        if ((car)->speed_left > 1) { \
-            (car)->speed_left = 1; \
+    if ((car)->speed_right > 0) { \
+        if ((car)->speed_left > 0) { \
+            (car)->speed_left = 0; \
         } \
         ledcWrite(MOTOR_B_PWM_CHANNEL, (car)->speed_left); \
     } \
@@ -105,9 +117,9 @@ do { \
 
 #define MOTOR_MOVE_RIGHT(car) \
 do { \
-    if ((car)->speed_left > 1) { \
-        if ((car)->speed_right > 1) { \
-            (car)->speed_right = 1; \
+    if ((car)->speed_left > 0) { \
+        if ((car)->speed_right > 0) { \
+            (car)->speed_right = 0; \
         } \
         ledcWrite(MOTOR_A_PWM_CHANNEL, (car)->speed_right); \
     } \

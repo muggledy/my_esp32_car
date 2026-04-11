@@ -8,6 +8,8 @@
 
 #define ENABLE_LCD1602
 
+#define ENABLE_HCSR04
+
 //板载LED引脚（可设置值）
 #define ONBOARD_LED_PIN 2
 //END
@@ -28,5 +30,15 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+//HC-SR04超声波模块引脚（可设置值）
+#define TRIG_PIN  27
+#define ECHO_PIN  26
+//END
+#define HCSR04_TRIGGER_INTERVAL 200 //超声波间隔200ms周期探测一次
+#define HCSR04_DISTANCE_BIAS 5
+#define HCSR04_SAFE_DISTANCE 12 //安全距离
+#define HCSR04_MIN_DISTANCE 2
+#define HCSR04_MAX_DISTANCE 360
 
 #endif
