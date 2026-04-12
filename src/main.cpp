@@ -256,7 +256,7 @@ String handle_command(String cmd) {
       global_car_speed = newSpeed;
 #ifdef ENABLE_HCSR04
       if (global_car_speed >= 127) {
-        HCSR04_SAFE_DISTANCE = HCSR04_BASIC_SAFE_DISTANCE + ((float)global_car_speed - 127) * 0.18; //PS：0.18数值可以根据实际电机转速以及现场测试加以调节
+        HCSR04_SAFE_DISTANCE = HCSR04_BASIC_SAFE_DISTANCE + ((float)global_car_speed - 127) * 0.12; //PS：所乘比例可以根据实际电机转速以及现场测试加以调节
       } else {
         HCSR04_SAFE_DISTANCE = HCSR04_BASIC_SAFE_DISTANCE;
       }
