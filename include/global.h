@@ -3,8 +3,7 @@
 
 #include <Arduino.h>
 
-//可注释掉ENABLE_SERIAL_DEBUG宏
-#define ENABLE_SERIAL_DEBUG
+// #define ENABLE_SERIAL_DEBUG //建议关闭该DEBUG宏开关
 
 //是否启用LCD液晶屏
 #define ENABLE_LCD1602
@@ -41,7 +40,7 @@
 #define TRIG_PIN  27
 #define ECHO_PIN  26
 //END
-#define HCSR04_TRIGGER_INTERVAL 100 //超声波间隔100ms周期探测一次，200ms太慢反应不急不利于运动避障
+#define HCSR04_TRIGGER_INTERVAL 100 //超声波间隔100ms周期探测一次，200ms就太慢了反应不急不利于运动避障
 #define HCSR04_DISTANCE_BIAS 5
 #define HCSR04_BASIC_SAFE_DISTANCE 10 //基础安全车距
 #define HCSR04_MIN_DISTANCE 2

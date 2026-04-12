@@ -14,6 +14,7 @@ SMART CAR
   2）lcd1602的SDA接单片机21引脚、SCL接单片机22引脚
   3）HC-SR04的Trigger/Echo引脚设置见global.h
   4）SG90舵机的控制引脚设置见global.h
+  PS：这些引脚编号可以根据不同开发板自行设置调整
 2. WiFi账号设置：见wifi.cpp
 */
 

@@ -1,5 +1,53 @@
-.pio
 .vscode/.browse.c_cpp.db*
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# ==============================================
+# 通用备份、临时文件
+# ==============================================
+*~
+.~*
+*.tmp
+*.temp
+*.bak
+*.bkp
+*.old
+*.swp
+*.swo
+
+# draw.io 自动备份
+~$*.drawio
+~$*.drawio.*
+*.drawio.bkp
+*.drawio.bak
+
+# ==============================================
+# PlatformIO / Arduino 编译产物
+# ==============================================
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/ipch/
+.vscode/*.log
+*.elf
+*.bin
+*.hex
+*.map
+*.d
+*.o
+
+# ==============================================
+# 日志、串口、调试
+# ==============================================
+*.log
+serial.log
+debug.log
+
+# ==============================================
+# 系统垃圾
+# ==============================================
+.DS_Store
+Thumbs.db
