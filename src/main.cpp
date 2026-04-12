@@ -9,10 +9,11 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 /*
 ESP32 DEVKIT V1
 SMART CAR
-1. 小车引脚连接（或参见“接线示意图.drawio”）：
+1. 小车引脚连接（或详参“接线示意图.drawio”）：
   1）motor.h中标注了“L298N控制线引脚编号”设置
   2）lcd1602的SDA接单片机21引脚、SCL接单片机22引脚
   3）HC-SR04的Trigger/Echo引脚设置见global.h
+  4）SG90舵机的控制引脚设置见global.h
 2. WiFi账号设置：见wifi.cpp
 */
 
@@ -45,9 +46,18 @@ volatile unsigned long echoStart = 0; // 中断服务程序中的相关变量需
 volatile unsigned long echoDuration = 0;
 volatile bool newDistanceAvailable = false;
 float distanceCm = 0;
+uint8_t HCSR04_SAFE_DISTANCE = HCSR04_BASIC_SAFE_DISTANCE;
 #endif
-
 // uint8_t lcd_buffer_len = 0;
+
+#ifdef ENABLE_SG90
+uint8_t sg90_left = 180; //舵机面朝左侧的角度值（可以通过<sg90_l:angle>命令进行修正）
+uint8_t sg90_ahead = 102; //舵机面朝正前方的角度值（可以通过<sg90_a:angle>命令进行修正）
+uint8_t sg90_right = 15; //舵机面朝右侧的角度值（可以通过<sg90_r:angle>命令进行修正）
+extern void initSG90();
+extern uint32_t angleToDuty(uint8_t angle);
+#define SG90_SERVO_ROTATE(angle) ledcWrite(SG90_SERVO_CHANNEL, angleToDuty(angle))
+#endif
 
 void setup() {
   init_car_motor();
@@ -63,6 +73,9 @@ void setup() {
   connect_wifi();
 #ifdef ENABLE_HCSR04
   initHCSR04();
+#endif
+#ifdef ENABLE_SG90
+  initSG90();
 #endif
 
   if (TST_FLAG(global_status_word, G_STATE_WIFI_CONNECTED)) { //只有联网成功，才启动WebSocket服务器
@@ -200,12 +213,18 @@ String handle_command(String cmd) {
         || IS_TURNING(&car)) {
       MOTOR_MOVE_WITH_SPEED(&car, global_car_speed);
     }
-    if (distanceCm < HCSR04_SAFE_DISTANCE) { //检查前方是否还有安全距离可以行驶，没有则强制停止
+#ifdef ENABLE_HCSR04
+    if ((distanceCm == 0) || (distanceCm >= HCSR04_SAFE_DISTANCE)) { //如果小车想前进，且前方距离可能的障碍物大于安全距离，则清除遇阻状态、允许前进
+      CLR_FLAG(global_status_word, G_STATE_CAR_BLOCKED_AHEAD);
+    }
+    if ((distanceCm < HCSR04_SAFE_DISTANCE) 
+        || TST_FLAG(global_status_word, G_STATE_CAR_BLOCKED_AHEAD)) { //检查前方是否还有安全距离可以行驶，没有则强制停止
+      SET_FLAG(global_status_word, G_STATE_CAR_BLOCKED_AHEAD);
       MOTOR_MOVE_STOP(&car);
     }
+#endif
     return "ok: moving forward";
-  }
-  else if (cmd == "backward") {
+  } else if (cmd == "backward") {
     if (car.gear != MOTOR_REVERSE) {
       MOTOR_SET_REVERSE_GEAR(&car, 0);
     }
@@ -213,6 +232,9 @@ String handle_command(String cmd) {
         || IS_TURNING(&car)) {
       MOTOR_MOVE_WITH_SPEED(&car, global_car_speed);
     }
+#ifdef ENABLE_HCSR04
+    CLR_FLAG(global_status_word, G_STATE_CAR_BLOCKED_AHEAD); //后退操作可以立即无条件清除“车辆遇阻”状态
+#endif
     return "ok: moving backward";
   } else if (cmd == "left") {
     if (!IS_TURNING_LEFT(&car)) {
@@ -229,8 +251,15 @@ String handle_command(String cmd) {
   } else if (cmd.startsWith("chgspeed:")) { // 修改小车速度
     // 解析速度值
     int newSpeed = cmd.substring(9).toInt();
-    if (newSpeed >= MOTOR_MIN_SPEED && newSpeed <= MOTOR_MAX_SPEED) {
+    if ((newSpeed >= MOTOR_MIN_SPEED) && (newSpeed <= MOTOR_MAX_SPEED)) {
       global_car_speed = newSpeed;
+#ifdef ENABLE_HCSR04
+      if (global_car_speed >= 127) {
+        HCSR04_SAFE_DISTANCE = HCSR04_BASIC_SAFE_DISTANCE + ((float)global_car_speed - 127) * 0.18; //PS：0.18数值可以根据实际电机转速以及现场测试加以调节
+      } else {
+        HCSR04_SAFE_DISTANCE = HCSR04_BASIC_SAFE_DISTANCE;
+      }
+#endif
       // 如果小车正在运动，立即应用新速度
       if ((GET_CURRENT_SPEED(&car) > 0) && (GET_CURRENT_SPEED(&car) != global_car_speed)) {
         if (IS_TURNING_LEFT(&car)) { //正在左转
@@ -267,7 +296,45 @@ String handle_command(String cmd) {
     snprintf(buffer, sizeof(buffer), "status: %s:%u/%u/%u", GET_CAR_GEAR_STR(&car), 
         /*GET_CURRENT_SPEED(&car)*/car.speed_left, car.speed_right, global_car_speed);
     return buffer;
-  } else {
+  } 
+#ifdef ENABLE_SG90
+  else if (cmd.startsWith("sg90:")) { //该命令<sg90:angle>用于舵机旋转测试
+    int newAngle = cmd.substring(5).toInt();
+// #ifdef ENABLE_SERIAL_DEBUG
+//     Serial.printf("[SG90] %d\n", newAngle);
+// #endif
+    if ((newAngle >= 0) && (newAngle <= 180)) {
+      SG90_SERVO_ROTATE(newAngle);
+    }
+    snprintf(buffer, sizeof(buffer), "ok: sg90 rotate to %d", newAngle);
+    return buffer;
+  } else if (cmd.startsWith("sg90_l:")) {
+    int newAngle = cmd.substring(7).toInt();
+    if ((newAngle >= 0) && (newAngle <= 180)) {
+      sg90_left = newAngle;
+      SG90_SERVO_ROTATE(sg90_left);
+    }
+    snprintf(buffer, sizeof(buffer), "ok: sg90 left is %d", sg90_left);
+    return buffer;
+  } else if (cmd.startsWith("sg90_a:")) {
+    int newAngle = cmd.substring(7).toInt();
+    if ((newAngle >= 0) && (newAngle <= 180)) {
+      sg90_ahead = newAngle;
+      SG90_SERVO_ROTATE(sg90_ahead);
+    }
+    snprintf(buffer, sizeof(buffer), "ok: sg90 ahead is %d", sg90_ahead);
+    return buffer;
+  } else if (cmd.startsWith("sg90_r:")) {
+    int newAngle = cmd.substring(7).toInt();
+    if ((newAngle >= 0) && (newAngle <= 180)) {
+      sg90_right = newAngle;
+      SG90_SERVO_ROTATE(sg90_right);
+    }
+    snprintf(buffer, sizeof(buffer), "ok: sg90 right is %d", sg90_right);
+    return buffer;
+  }
+#endif
+  else {
     return "error: unknown command '" + cmd + "'";
   }
 }
@@ -328,7 +395,9 @@ void handleCurrentDistance() {
       if (distanceCm > HCSR04_DISTANCE_BIAS) {
         distanceCm -= HCSR04_DISTANCE_BIAS;
       }
-      if ((car.gear == MOTOR_DRIVE) && (distanceCm < HCSR04_SAFE_DISTANCE)) { //自动停止，防止撞击前方阻碍物体
+      if (((car.gear == MOTOR_DRIVE) && (distanceCm < HCSR04_SAFE_DISTANCE)) 
+          || TST_FLAG(global_status_word, G_STATE_CAR_BLOCKED_AHEAD)) { //自动停止，防止撞击前方阻碍物体
+        SET_FLAG(global_status_word, G_STATE_CAR_BLOCKED_AHEAD);
         MOTOR_MOVE_STOP(&car);
       }
 #ifdef ENABLE_SERIAL_DEBUG
@@ -353,5 +422,17 @@ void handleCurrentDistance() {
 #endif
     }
   }
+}
+#endif
+
+#ifdef ENABLE_SG90
+uint32_t angleToDuty(uint8_t angle) {
+  uint32_t us = map(angle, 0, 180, 500, 2500); //将0~180角度映射到0.5~2.5ms脉宽范围内
+  return ((float)us / 1000 / SG90_SERVO_CYCLE) * pow(2, SG90_SERVO_RESOLUTION); //(us/1000 / 20)所得是占空比，再乘以2^8，就得到占空比的具体数值
+}
+
+void initSG90() {
+  ledcSetup(SG90_SERVO_CHANNEL, SG90_SERVO_FREQ, SG90_SERVO_RESOLUTION);
+  ledcAttachPin(SG90_SERVO_PIN, SG90_SERVO_CHANNEL);
 }
 #endif

@@ -11,7 +11,7 @@ extern LiquidCrystal_I2C lcd;
 extern uint32_t global_status_word;
 
 static const char* ssid     = "TP-LINK_07D2"; // Change this to your WiFi SSID
-static const char* password = "2016SSJL"; // Change this to your WiFi password
+static const char* password = "12345678"; // Change this to your WiFi password
 
 //return: 1 means success, 0 failed
 bool connect_wifi() {
